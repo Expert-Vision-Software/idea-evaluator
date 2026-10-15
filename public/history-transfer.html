@@ -1,0 +1,33 @@
+<!doctype html>
+<!--
+  Served on killmyidea.stemonte.io only (nginx exempts it from the 301).
+  Reads this origin's idea history and hands it to killmyidea.biz in the URL
+  fragment, which never leaves the browser. See the matching script in index.html.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Kill My Idea has moved</title>
+    <link rel="canonical" href="https://killmyidea.biz/" />
+    <script>
+      ;(function () {
+        var to = '/'
+        try {
+          var param = new URLSearchParams(location.search).get('to') || '/'
+          // Path only: never let ?to= point at another host.
+          if (/^\/(?![\/\\])/.test(param)) to = param
+        } catch (e) {}
+        var data = ''
+        try {
+          if (location.hostname === 'killmyidea.stemonte.io') data = localStorage.getItem('killmyidea:history:v1') || ''
+        } catch (e) {}
+        location.replace('https://killmyidea.biz' + to + '#history=' + encodeURIComponent(data))
+      })()
+    </script>
+    <noscript><meta http-equiv="refresh" content="0; url=https://killmyidea.biz/" /></noscript>
+  </head>
+  <body>
+    <p>Kill My Idea has moved to <a href="https://killmyidea.biz/">killmyidea.biz</a>.</p>
+  </body>
+</html>

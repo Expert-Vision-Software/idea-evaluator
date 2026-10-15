@@ -32,12 +32,13 @@ Successful evaluations are archived in SQLite at `data/analytics.sqlite` by
 default. Set `ANALYTICS_DB_PATH` to an absolute path on a persistent disk in
 production. Users can opt out per request with the checkbox below private history.
 
-`SITE_URL` (optional) sets the absolute URL used in the OG/Twitter image tags.
-It defaults to `https://killmyidea.stemonte.io`. The image itself is `public/og.png` (1200×630).
+`SITE_URL` (optional) sets the absolute URL used in the canonical and OG/Twitter
+tags, `robots.txt` and `sitemap.xml` (both generated at build time).
+It defaults to `https://killmyidea.biz`. The image itself is `public/og.png` (1200×630).
 
 For UI work without a key, set `TYPESAFE_MOCK=1`. The API then returns
 deterministic fake answers labelled `MOCK DATA` in the raw-data panel. Mock mode is
-ignored on Vercel.
+ignored in production.
 
 ## 3. Run locally
 
@@ -56,18 +57,40 @@ the average, the verdict, latency and token usage. `?debug=1` opens it by defaul
 npm run build        # typecheck + static build in dist/
 ```
 
-## 5. Deploy to Vercel
+## 5. Deploy (Laravel Forge)
 
-1. Import the repo in Vercel. The framework is detected as Vite.
-2. Add `TYPESAFE_API_KEY` under Project → Settings → Environment Variables.
-3. Deploy. `dist/` is served statically and `api/evaluate.ts` becomes the only function.
+The site runs on Forge as a Node server: `npm run build` for the static
+assets in `dist/`, then `npm run build:server && npm start` to serve the API
+endpoints. Set `TYPESAFE_API_KEY` in the site's environment file.
 
-Or use the CLI: `npx vercel --prod`.
+SQLite needs a persistent local disk, which the Forge server provides
+directly (`data/analytics.sqlite`); set `ANALYTICS_DB_PATH` to an absolute
+path on that disk in production.
 
-SQLite needs a persistent local disk. It works directly with the Node server
-(`npm run build:server && npm start`) and hosts such as Forge. Vercel Functions
-do not provide a durable filesystem, so use a persistent deployment or replace
-the archive adapter before relying on the collected data there.
+Because the SPA is served with an nginx fallback (`try_files ... /index.html`),
+every unknown path returns the index page with HTTP 200. Bots probing random
+URLs therefore show up as pageviews in DataFast. To stop that, change the
+fallback in the site's nginx configuration (Forge → site → Edit Nginx
+Configuration) to return 404 for unknown paths if the app has no real routes:
+
+```nginx
+location / {
+    try_files $uri $uri/ =404;
+}
+```
+
+### Domain move (killmyidea.stemonte.io → killmyidea.biz)
+
+Both domains belong to the same Forge site. The old one answers every request
+with a 301 to the same path and query on `killmyidea.biz`, via
+`deploy/nginx-old-domain-redirect.conf`, pasted into the site's nginx
+configuration inside the `server` block. Keep that redirect for at least a year.
+
+Idea history lives in `localStorage`, which is per origin. The 301 adds
+`#moved`; the inline script in `index.html` then makes one hop to
+`public/history-transfer.html` on the old domain, which returns with its
+history in the URL fragment (never sent to a server) to be merged. It runs
+at most once per browser. Remove both once the old domain is retired.
 
 ## 6. Scoring
 
@@ -96,8 +119,8 @@ Different, Buildable, Shareable, plus Adoption, Immediate appeal and Fun for goa
 ## Layout
 
 ```
-api/evaluate.ts           serverless endpoint (validate → Jev → score → respond)
-api/stats.ts              serverless endpoint (ideas submitted + verdict split, 5-min cache)
+api/evaluate.ts           API endpoint (validate → Jev → score → respond)
+api/stats.ts              API endpoint (ideas submitted + verdict split, 5-min cache)
 api/_analytics-db.ts      SQLite archive for evaluation requests and scores
 api/_mock.ts              local-only fake answers
 src/lib/questions.ts      Jev questions
@@ -117,7 +140,8 @@ scripts/run-scoring-benchmark.mjs  benchmark runner and summary
 Production builds load DataFast's cookieless script (`script.cookieless.js`) with
 the site id `dfid_UvVlC3fid8kOr95YTMIho` (`vite.config.ts`). Dev builds only track
 when `DATAFAST_WEBSITE_ID` is set; `DATAFAST_WEBSITE_ID=off` disables tracking.
-`DATAFAST_DOMAIN` defaults to `killmyidea.stemonte.io`. In DataFast, enable **Settings → General → Cookieless / privacy mode**
+`DATAFAST_DOMAIN` defaults to `killmyidea.biz`; `DATAFAST_ALLOWED_HOSTNAMES` defaults to
+`killmyidea.stemonte.io` so the old domain still counts during the move. In DataFast, enable **Settings → General → Cookieless / privacy mode**
 so the dashboard matches the script.
 
 There is one custom goal (`src/lib/analytics.ts`): `idea_submitted`, with

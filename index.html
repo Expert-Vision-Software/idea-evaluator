@@ -21,6 +21,50 @@
     <meta name="twitter:image" content="__SITE_URL__/og.png" />
     <link rel="canonical" href="__SITE_URL__/" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script>
+      // One-time history transfer from killmyidea.stemonte.io (localStorage is per origin).
+      // nginx 301s the old domain here with #moved; we hop once to history-transfer.html
+      // there, which comes back with #history=<its localStorage>. Runs before analytics
+      // so the fragment never reaches it. Safe to delete once the old domain is gone.
+      ;(function () {
+        var KEY = 'killmyidea:history:v1'
+        var FLAG = 'killmyidea:history-transfer'
+        var hash = location.hash
+        if (hash !== '#moved' && hash.indexOf('#history=') !== 0) return
+        try {
+          history.replaceState(null, '', location.pathname + location.search)
+          if (hash === '#moved') {
+            if (localStorage.getItem(FLAG)) return
+            localStorage.setItem(FLAG, new Date().toISOString())
+            sessionStorage.setItem(FLAG, 'pending')
+            location.replace(
+              'https://killmyidea.stemonte.io/history-transfer.html?to=' +
+                encodeURIComponent(location.pathname + location.search),
+            )
+            return
+          }
+          // Only accept data from a hop this tab started, not from a crafted link.
+          if (sessionStorage.getItem(FLAG) !== 'pending') return
+          sessionStorage.removeItem(FLAG)
+          var raw = decodeURIComponent(hash.slice('#history='.length))
+          if (!raw) return
+          var list = function (v) {
+            return Array.isArray(v) ? v : v && Array.isArray(v.ideas) ? v.ideas : []
+          }
+          var seen = {}
+          var ideas = list(JSON.parse(localStorage.getItem(KEY) || 'null'))
+            .concat(list(JSON.parse(raw)))
+            .filter(function (i) {
+              if (!i || typeof i.id !== 'string' || seen[i.id]) return false
+              return (seen[i.id] = true)
+            })
+            .sort(function (a, b) {
+              return String(b.createdAt).localeCompare(String(a.createdAt))
+            })
+          localStorage.setItem(KEY, JSON.stringify({ version: 1, ideas: ideas.slice(0, 100) }))
+        } catch (e) {}
+      })()
+    </script>
     <!--DATAFAST-->
   </head>
   <body>

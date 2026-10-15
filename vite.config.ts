@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import type { IncomingMessage } from 'node:http'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
 
-// Serves api/evaluate.ts and api/stats.ts during `npm run dev`, mirroring the Vercel functions.
+// Serves api/evaluate.ts and api/stats.ts during `npm run dev`, mirroring the production server.
 function localApi(): Plugin {
   return {
     name: 'local-api',
@@ -50,12 +50,26 @@ function localApi(): Plugin {
   }
 }
 
-// Absolute URLs for OG tags. Set SITE_URL for previews; defaults to production.
+// Absolute URLs for canonical/OG tags, robots.txt and sitemap.xml.
+// Set SITE_URL for previews; defaults to production.
 function siteUrl(): Plugin {
+  const base = () => (process.env.SITE_URL || 'https://killmyidea.biz').replace(/\/$/, '')
   return {
     name: 'site-url',
-    transformIndexHtml: (html) =>
-      html.replaceAll('__SITE_URL__', (process.env.SITE_URL || 'https://killmyidea.stemonte.io').replace(/\/$/, '')),
+    transformIndexHtml: (html) => html.replaceAll('__SITE_URL__', base()),
+    generateBundle() {
+      if (this.environment.name !== 'client') return
+      this.emitFile({ type: 'asset', fileName: 'robots.txt', source: `User-agent: *\nAllow: /\n\nSitemap: ${base()}/sitemap.xml\n` })
+      this.emitFile({
+        type: 'asset',
+        fileName: 'sitemap.xml',
+        source: `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>${base()}/</loc></url>
+</urlset>
+`,
+      })
+    },
   }
 }
 
@@ -70,10 +84,12 @@ function datafast(mode: string): Plugin {
     transformIndexHtml(html) {
       const env = process.env.DATAFAST_WEBSITE_ID
       const id = env === 'off' ? '' : env || (mode === 'production' ? DATAFAST_DEFAULT_ID : '')
-      const domain = process.env.DATAFAST_DOMAIN || 'killmyidea.stemonte.io'
+      const domain = process.env.DATAFAST_DOMAIN || 'killmyidea.biz'
+      // Keeps counting visits on the old domain during the move to killmyidea.biz.
+      const allowed = process.env.DATAFAST_ALLOWED_HOSTNAMES ?? 'killmyidea.stemonte.io'
       const snippet = id
         ? `<script>window.datafast=window.datafast||function(){(window.datafast.q=window.datafast.q||[]).push(arguments)};</script>
-    <script defer data-website-id="${id}" data-domain="${domain}" src="https://datafa.st/js/script.cookieless.js"></script>`
+    <script defer data-website-id="${id}" data-domain="${domain}"${allowed ? ` data-allowed-hostnames="${allowed}"` : ''} src="https://datafa.st/js/script.cookieless.js"></script>`
         : ''
       return html.replace('<!--DATAFAST-->', snippet)
     },
