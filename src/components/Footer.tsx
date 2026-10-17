@@ -10,6 +10,14 @@ export function Footer() {
         </a>
       </span>
       <span>
+        <a href="/mcp/" className="underline">
+          Free MCP server
+        </a>
+        {' · '}
+        <a href="/stats/" className="underline">
+          Stats
+        </a>
+        {' · '}
         <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className="underline">
           Source on GitHub
         </a>

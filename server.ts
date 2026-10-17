@@ -1,10 +1,21 @@
 // Production server for non-Vercel hosts (e.g. Laravel Forge).
-// Only handles /api/evaluate and /api/stats; nginx serves dist/ statically and proxies /api/ here.
+// Only handles /api/*; nginx serves dist/ statically and proxies /api/ here.
 import { createServer } from 'node:http'
-import { POST } from './api/evaluate.js'
-import { GET } from './api/stats.js'
+import { forwardedHeaders } from './api/_headers.js'
+import * as evaluate from './api/evaluate.js'
+import * as mcp from './api/mcp.js'
+import * as stats from './api/stats.js'
+import * as usage from './api/usage.js'
 
 const port = Number(process.env.PORT || 3001)
+
+type Handler = (request: Request) => Response | Promise<Response>
+const routes: Record<string, Partial<Record<string, Handler>>> = {
+  '/api/evaluate': { POST: evaluate.POST },
+  '/api/stats': { GET: stats.GET },
+  '/api/usage': { GET: usage.GET },
+  '/api/mcp': { POST: mcp.POST, GET: mcp.GET, OPTIONS: mcp.OPTIONS },
+}
 
 const send = async (res: import('node:http').ServerResponse, response: Response) => {
   res.statusCode = response.status
@@ -13,20 +24,22 @@ const send = async (res: import('node:http').ServerResponse, response: Response)
 }
 
 createServer(async (req, res) => {
-  const path = req.url?.split('?')[0]
+  const path = req.url?.split('?')[0] ?? ''
+  const route = routes[path]
+  const handler = route?.[req.method ?? '']
+  if (!handler) {
+    res.statusCode = route ? 405 : 404
+    return res.end()
+  }
   try {
-    if (path === '/api/stats' && req.method === 'GET') return await send(res, await GET())
-    if (path !== '/api/evaluate' || req.method !== 'POST') {
-      res.statusCode = path === '/api/evaluate' || path === '/api/stats' ? 405 : 404
-      return res.end()
-    }
     const chunks: Buffer[] = []
     for await (const chunk of req) chunks.push(chunk as Buffer)
-    const response = await POST(
-      new Request('http://localhost/api/evaluate', {
-        method: 'POST',
-        body: Buffer.concat(chunks).toString(),
-        headers: { 'Content-Type': 'application/json' },
+    const hasBody = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS'
+    const response = await handler(
+      new Request(`http://localhost${path}`, {
+        method: req.method,
+        body: hasBody ? Buffer.concat(chunks).toString() : undefined,
+        headers: forwardedHeaders(req.headers),
       }),
     )
     await send(res, response)

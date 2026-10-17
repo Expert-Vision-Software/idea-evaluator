@@ -74,6 +74,7 @@ describe('EvaluationArchive', () => {
       input_tokens: 123,
       output_tokens: 45,
       goal: 'money',
+      source: 'web',
       scoring_version: 2,
       needs_detail: 0,
       problem: 75,
@@ -92,12 +93,58 @@ describe('EvaluationArchive', () => {
       requestId: 'request-oss',
       createdAt: '2026-09-17T12:00:00.000Z',
       idea: 'An open source idea',
+      source: 'mcp',
       evaluation: evaluation({ goal: 'open_source', dimensions: { ...DIMS, adoption: 80 } }),
     })
     archive.close()
 
     const row = readRows(path)[0]
-    expect(row).toMatchObject({ scoring_version: 2, goal: 'open_source', money: null, adoption: 80, appeal: null, fun: null })
+    expect(row).toMatchObject({ scoring_version: 2, goal: 'open_source', source: 'mcp', money: null, adoption: 80, appeal: null, fun: null })
+  })
+
+  it('logs MCP requests in their own table', () => {
+    const path = tempDb()
+    const archive = new EvaluationArchive(path)
+    archive.logMcpRequest({ createdAt: '2026-10-17T12:00:00.000Z', method: 'initialize', clientName: 'cursor', ok: true, latencyMs: 1.4 })
+    archive.logMcpRequest({ createdAt: '2026-10-17T12:00:01.000Z', method: 'tools/call', tool: 'judge_idea', ok: false, error: 'At least 20 characters.', latencyMs: 3 })
+    archive.close()
+
+    const db = new DatabaseSync(path, { readOnly: true })
+    const rows = db.prepare('SELECT * FROM mcp_requests ORDER BY id').all() as Record<string, unknown>[]
+    db.close()
+    expect(rows).toMatchObject([
+      { method: 'initialize', tool: null, client_name: 'cursor', ok: 1, error: null, latency_ms: 1 },
+      { method: 'tools/call', tool: 'judge_idea', ok: 0, error: 'At least 20 characters.', latency_ms: 3 },
+    ])
+  })
+
+  it('aggregates public usage', () => {
+    const path = tempDb()
+    const archive = new EvaluationArchive(path)
+    archive.save({ requestId: 'w', createdAt: '2026-10-16T10:00:00.000Z', idea: 'Web idea', evaluation: evaluation({ score: 30, verdict: 'KILL', dimensions: { ...DIMS } }) })
+    archive.save({ requestId: 'm', createdAt: '2026-10-17T10:00:00.000Z', idea: 'MCP idea', source: 'mcp', evaluation: evaluation({ score: 80, verdict: 'SHIP', dimensions: { ...DIMS } }) })
+    archive.save({ requestId: 'old', createdAt: '2026-01-01T10:00:00.000Z', idea: 'Old idea', evaluation: evaluation({ score: 55, verdict: 'FIX', dimensions: { ...DIMS } }) })
+    archive.logMcpRequest({ createdAt: '2026-10-17T09:00:00.000Z', method: 'initialize', clientName: 'cursor', ok: true, latencyMs: 1 })
+    archive.logMcpRequest({ createdAt: '2026-10-17T09:00:01.000Z', method: 'tools/call', tool: 'judge_idea', ok: true, latencyMs: 300 })
+    archive.logMcpRequest({ createdAt: '2026-10-17T09:00:02.000Z', method: 'tools/call', tool: 'judge_idea', ok: false, latencyMs: 1 })
+
+    const usage = archive.publicUsage('2026-10-01T00:00:00.000Z')
+    archive.close()
+
+    expect(usage.totals).toEqual({ web: 2, mcp: 1, connections: 1, toolCalls: 1 })
+    expect(usage.days).toEqual([
+      { day: '2026-10-16', web: 1, mcp: 0, toolCalls: 0 },
+      { day: '2026-10-17', web: 0, mcp: 1, toolCalls: 1 },
+    ])
+    expect(usage.tools).toEqual([{ tool: 'judge_idea', calls: 1 }])
+    expect(usage.clients).toEqual([{ client: 'cursor', connections: 1 }])
+    expect(usage.verdicts).toEqual(
+      expect.arrayContaining([
+        { source: 'web', verdict: 'KILL', n: 1 },
+        { source: 'web', verdict: 'FIX', n: 1 },
+        { source: 'mcp', verdict: 'SHIP', n: 1 },
+      ]),
+    )
   })
 
   it('counts stored evaluations and their verdicts', () => {
@@ -187,7 +234,7 @@ describe('EvaluationArchive', () => {
     archive.close()
 
     const rows = readRows(path)
-    expect(rows[0]).toMatchObject({ request_id: 'v1-fun', scoring_version: 1, needs_detail: 1, problem: 25, appeal: null, fun: 75 })
+    expect(rows[0]).toMatchObject({ request_id: 'v1-fun', scoring_version: 1, needs_detail: 1, source: 'web', problem: 25, appeal: null, fun: 75 })
     expect(rows[1]).toMatchObject({ request_id: 'v2-fun', scoring_version: 2, problem: null, appeal: 75, fun: 75 })
 
     const db = new DatabaseSync(path, { readOnly: true })

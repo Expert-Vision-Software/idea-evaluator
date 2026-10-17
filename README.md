@@ -33,7 +33,7 @@ default. Set `ANALYTICS_DB_PATH` to an absolute path on a persistent disk in
 production. Users can opt out per request with the checkbox below private history.
 
 `SITE_URL` (optional) sets the absolute URL used in the canonical and OG/Twitter
-tags, `robots.txt` and `sitemap.xml` (both generated at build time).
+tags, `robots.txt`, `sitemap.xml`, `/mcp.md` and `llms.txt` (generated at build time).
 It defaults to `https://killmyidea.biz`. The image itself is `public/og.png` (1200×630).
 
 For UI work without a key, set `TYPESAFE_MOCK=1`. The API then returns
@@ -43,7 +43,7 @@ ignored in production.
 ## 3. Run locally
 
 ```bash
-npm run dev          # http://127.0.0.1:5317 (serves /api/evaluate too)
+npm run dev          # http://127.0.0.1:5317 (serves /api/* and /mcp/ too)
 npm test             # unit tests
 npm run benchmark    # balanced scoring benchmark; requires the app to be running
 ```
@@ -92,6 +92,44 @@ Idea history lives in `localStorage`, which is per origin. The 301 adds
 history in the URL fragment (never sent to a server) to be merged. It runs
 at most once per browser. Remove both once the old domain is retired.
 
+## MCP server
+
+`api/mcp.ts` is a free, public MCP server at `/api/mcp` (Streamable HTTP, no auth).
+It is stateless: every POST is one JSON-RPC message answered with plain JSON, there
+are no sessions and GET returns 405. Tools:
+
+- `judge_idea(idea, goal?, do_not_archive?)`: same pipeline as `/api/evaluate`
+  (`api/_judge.ts`), returns the verdict, score, best signal, biggest risk and the
+  eight sub-scores, without the raw Jev response
+- `get_stats()`: analyzed count and verdict split
+
+MCP evaluations are archived like web ones, with `source = 'mcp'`.
+
+Usage is tracked in the `mcp_requests` table: one row per JSON-RPC message with the
+method, tool name, client name and version (sent with `initialize`), user agent,
+protocol version, success or error, and latency. It never stores tool arguments or
+IP addresses. Summary for the last 7 days (or `-- 30` for 30):
+
+```bash
+npm run mcp:usage
+```
+
+That report includes user agents and error messages, so it stays private. The public
+`/stats/` page (`stats/index.html` + `src/stats-page.tsx`, linked in the footer) reads
+`GET /api/usage` (`api/usage.ts`, cached 5 minutes): ideas analyzed on the web and via
+MCP, a 30-day daily chart, tool calls, clients and verdicts. Client and tool names come
+from callers, so only known ones are published (`clientLabel`), everything else is "Other".
+
+Docs: `mcp/index.html` is the static SEO page at `/mcp/` (a second Vite entry);
+`mcp/mcp.md` is served as `/mcp.md` for agents and `llms.txt` is generated in
+`vite.config.ts`. Both are emitted at build time and served by the dev server.
+
+```bash
+claude mcp add --transport http killmyidea https://killmyidea.biz/api/mcp
+```
+
+nginx already proxies `/api/` to the Node server, so no extra config is needed.
+
 ## 6. Scoring
 
 `src/lib/scoring.ts` and `src/lib/verdict.ts`. That's all there is:
@@ -119,8 +157,11 @@ Different, Buildable, Shareable, plus Adoption, Immediate appeal and Fun for goa
 ## Layout
 
 ```
-api/evaluate.ts           API endpoint (validate → Jev → score → respond)
+api/evaluate.ts           API endpoint for the website
+api/mcp.ts                MCP server (JSON-RPC over POST /api/mcp)
+api/_judge.ts             shared pipeline (validate → Jev → score → archive)
 api/stats.ts              API endpoint (ideas submitted + verdict split, 5-min cache)
+api/usage.ts              public usage numbers for /stats/ (5-min cache)
 api/_analytics-db.ts      SQLite archive for evaluation requests and scores
 api/_mock.ts              local-only fake answers
 src/lib/questions.ts      Jev questions
@@ -131,6 +172,9 @@ src/lib/storage.ts        history (IdeaStore interface, localStorage implementat
 src/lib/share.ts          share text and X intent URL
 src/lib/features.ts       public site and repository URLs
 src/components/           UI
+mcp/index.html            /mcp/ docs page (SEO)
+mcp/mcp.md                /mcp.md docs for agents
+stats/index.html          /stats/ public usage page
 benchmarks/cases.json     balanced, synthetic benchmark cases
 scripts/run-scoring-benchmark.mjs  benchmark runner and summary
 ```
@@ -150,7 +194,7 @@ There is one custom goal (`src/lib/analytics.ts`): `idea_submitted`, with
 ## Evaluation archive (SQLite)
 
 Unless the user checks the opt-out, each successful evaluation creates one row
-in the `evaluations` table. It includes the idea, scoring version, total score,
+in the `evaluations` table. It includes the idea, where it came from (`source`: `web` or `mcp`), scoring version, total score,
 raw verdict, clarity-gate status, category, all eight dimension scores, understandability, latency, model, token usage and
 the complete diagnostic response JSON. It deliberately excludes IP addresses,
 cookies and browser identifiers.

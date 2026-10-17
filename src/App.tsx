@@ -20,6 +20,14 @@ const MIN_JUDGING_MS = 480
 /** `?debug=1` opens the raw-data panel by default. */
 const debug = new URLSearchParams(window.location.search).get('debug') === '1'
 
+/** `?open=history` opens the history drawer: the History button on /mcp/ links here. */
+const openHistory = new URLSearchParams(window.location.search).get('open') === 'history'
+if (openHistory) {
+  const url = new URL(window.location.href)
+  url.searchParams.delete('open')
+  window.history.replaceState(null, '', url)
+}
+
 async function evaluate(body: EvaluateRequest): Promise<Evaluation> {
   const res = await fetch('/api/evaluate', {
     method: 'POST',
@@ -40,7 +48,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ResultModel | null>(null)
   const [saved, setSaved] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(openHistory)
   const [history, setHistory] = useState<SavedIdea[]>([])
   const [stats, setStats] = useState<Stats | null>(null)
   const [statsOpen, setStatsOpen] = useState(false)

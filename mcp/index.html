@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Kill My Idea MCP server: free startup idea validation for AI agents</title>
+    <meta name="description" content="Free, public MCP server. Let Claude, ChatGPT, Cursor, Codex or any AI agent judge startup ideas: KILL IT, FIX IT or SHIP IT, with a 0-100 score. No API key, no signup." />
+    <meta name="theme-color" content="#f1efe8" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Kill My Idea" />
+    <meta property="og:title" content="Kill My Idea MCP server: let your AI agent judge startup ideas" />
+    <meta property="og:description" content="Free, public MCP server. KILL IT, FIX IT or SHIP IT, with a 0-100 score. No API key, no signup." />
+    <meta property="og:url" content="__SITE_URL__/mcp/" />
+    <meta property="og:image" content="__SITE_URL__/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Kill My Idea: kill it, fix it or ship it. Judged by Jev." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Kill My Idea MCP server" />
+    <meta name="twitter:description" content="Free MCP server: let your AI agent judge startup ideas. No API key." />
+    <meta name="twitter:image" content="__SITE_URL__/og.png" />
+    <link rel="canonical" href="__SITE_URL__/mcp/" />
+    <link rel="alternate" type="text/markdown" href="__SITE_URL__/mcp.md" title="Kill My Idea MCP server (Markdown, for agents)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "SoftwareApplication",
+            "name": "Kill My Idea MCP server",
+            "url": "__SITE_URL__/mcp/",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Any",
+            "description": "Free, public Model Context Protocol server that judges startup ideas: KILL IT, FIX IT or SHIP IT, with a 0-100 score and eight sub-scores.",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+            "isAccessibleForFree": true,
+            "author": { "@type": "Person", "name": "Stefano Monteduro", "url": "https://x.com/stemonteduro" },
+            "codeRepository": "https://github.com/monteduro/killmyidea"
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "Kill My Idea", "item": "__SITE_URL__/" },
+              { "@type": "ListItem", "position": 2, "name": "MCP server", "item": "__SITE_URL__/mcp/" }
+            ]
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "Is the Kill My Idea MCP server free?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Yes. It is public and free. No API key, no account, no OAuth. Point your MCP client at __SITE_URL__/api/mcp." }
+              },
+              {
+                "@type": "Question",
+                "name": "Which AI clients work with it?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Any client that supports remote MCP servers over Streamable HTTP: Claude Code, Claude Desktop and claude.ai, ChatGPT, Cursor, VS Code, Codex, Windsurf, Gemini CLI. Clients that only speak stdio can use npx mcp-remote." }
+              },
+              {
+                "@type": "Question",
+                "name": "Does an LLM write the verdict?",
+                "acceptedAnswer": { "@type": "Answer", "text": "No. Jev by TypeSafe AI answers eight fixed rubric questions with calibrated probabilities. The score is a weighted average, the verdict a fixed threshold. No generated prose." }
+              },
+              {
+                "@type": "Question",
+                "name": "Are my ideas stored?",
+                "acceptedAnswer": { "@type": "Answer", "text": "Ideas are archived anonymously for product analytics, without IP addresses or identifiers. Pass do_not_archive: true and the idea text is not stored." }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+    <!--DATAFAST-->
+  </head>
+  <body>
+    <div class="flex min-h-dvh flex-col">
+      <!-- Static fallback for crawlers and no-JS; src/mcp-page.tsx replaces it with the app header. -->
+      <div id="site-header">
+        <header class="flex flex-wrap items-start justify-between gap-4 px-5 pt-5 sm:px-8 sm:pt-7">
+          <a href="/" aria-label="Kill My Idea home" class="block text-xl font-black uppercase leading-[0.82] tracking-[-0.04em]">
+            <span class="block">Kill</span>
+            <span class="block">My</span>
+            <span class="block">Idea</span>
+          </a>
+          <nav class="ml-auto flex items-stretch gap-1 sm:gap-2">
+            <a href="/" class="border-2 border-ink bg-ink px-3 py-1.5 font-mono text-xs uppercase tracking-widest text-paper transition-colors hover:bg-kill hover:text-ink">Try it</a>
+            <a href="https://github.com/monteduro/killmyidea" target="_blank" rel="noopener noreferrer" class="border-2 border-current px-3 py-1.5 font-mono text-xs uppercase tracking-widest hover:bg-current/10">GitHub</a>
+          </nav>
+        </header>
+      </div>
+
+      <main class="mx-auto w-full max-w-4xl flex-1 px-5 pb-16 pt-10 sm:px-8 sm:pt-14">
+        <p class="font-mono text-[11px] uppercase tracking-widest opacity-60">MCP server · free · no API key · no signup</p>
+        <h1 class="mt-3 text-[clamp(3rem,11vw,6.5rem)] font-black uppercase leading-[0.85] tracking-[-0.05em]">
+          Let your agent <span class="text-kill">kill</span> the idea.
+        </h1>
+        <p class="mt-6 max-w-2xl text-xl font-medium leading-snug sm:text-2xl">
+          The Kill My Idea MCP server gives Claude, ChatGPT, Cursor, Codex and any other AI agent one honest tool:
+          judge a startup idea. <strong>KILL IT</strong>, <strong>FIX IT</strong> or <strong>SHIP IT</strong>, a 0-100 score,
+          the best signal and the biggest risk. In about a second.
+        </p>
+
+        <section class="mt-10" aria-labelledby="endpoint">
+          <h2 id="endpoint" class="font-mono text-[11px] uppercase tracking-widest opacity-60">Endpoint · Streamable HTTP</h2>
+          <div class="mt-2 flex border-2 border-ink">
+            <code id="mcp-url" class="min-w-0 flex-1 overflow-x-auto whitespace-nowrap bg-white/40 px-4 py-3 font-mono text-base sm:text-lg">__SITE_URL__/api/mcp</code>
+            <button type="button" data-copy="mcp-url" class="shrink-0 cursor-pointer border-l-2 border-ink bg-ink px-4 font-mono text-xs uppercase tracking-widest text-paper hover:bg-kill hover:text-ink">Copy</button>
+          </div>
+          <p class="mt-2 font-mono text-[11px] uppercase tracking-widest opacity-60">No auth header. No session. Stateless JSON-RPC over POST.</p>
+        </section>
+
+        <section class="mt-14 border-t-2 border-ink pt-8" aria-labelledby="agents">
+          <h2 id="agents" class="text-3xl font-black uppercase tracking-tight sm:text-4xl">Let your agent set it up</h2>
+          <p class="mt-3 max-w-2xl text-lg leading-snug">
+            Paste this into Claude Code, Codex, Cursor or any coding agent. It reads the Markdown docs and configures itself.
+          </p>
+          <div class="mt-4 border-2 border-ink">
+            <pre id="agent-prompt" class="overflow-x-auto whitespace-pre-wrap bg-white/40 p-4 font-mono text-sm leading-relaxed">Add the Kill My Idea MCP server to my setup. It is a free, public remote MCP server (Streamable HTTP) at __SITE_URL__/api/mcp with no API key and no auth. Read __SITE_URL__/mcp.md for the exact config for the client you are running in, install it, then list its tools to confirm it works.</pre>
+            <div class="flex flex-wrap items-center justify-between gap-2 border-t-2 border-ink px-4 py-2 font-mono text-[11px] uppercase tracking-widest">
+              <span class="opacity-60">Docs for agents: <a class="underline" href="/mcp.md">/mcp.md</a> · <a class="underline" href="/llms.txt">/llms.txt</a></span>
+              <button type="button" data-copy="agent-prompt" class="cursor-pointer underline hover:text-kill">Copy prompt</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="mt-14 border-t-2 border-ink pt-8" aria-labelledby="install">
+          <h2 id="install" class="text-3xl font-black uppercase tracking-tight sm:text-4xl">Install</h2>
+          <p class="mt-3 max-w-2xl text-lg leading-snug">One URL. Pick your client.</p>
+
+          <div class="mt-6 space-y-6">
+            <article>
+              <h3 class="text-xl font-bold">Claude Code</h3>
+              <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>claude mcp add --transport http killmyidea __SITE_URL__/api/mcp</code></pre>
+            </article>
+
+            <article>
+              <h3 class="text-xl font-bold">Claude Desktop and claude.ai</h3>
+              <p class="mt-1 leading-snug">Settings → Connectors → <em>Add custom connector</em>. Name it <code class="font-mono">Kill My Idea</code>, paste the endpoint URL, leave authentication empty.</p>
+            </article>
+
+            <article>
+              <h3 class="text-xl font-bold">ChatGPT</h3>
+              <p class="mt-1 leading-snug">Settings → Apps → Advanced → turn on <em>Developer mode</em>, then create an app with the endpoint URL and <em>No authentication</em>.</p>
+            </article>
+
+            <article>
+              <h3 class="text-xl font-bold">Cursor</h3>
+              <p class="mt-1 leading-snug"><a data-deeplink="cursor" class="underline" href="#install">One-click install</a>, or add to <code class="font-mono">~/.cursor/mcp.json</code>:</p>
+              <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>{
+  "mcpServers": {
+    "killmyidea": { "url": "__SITE_URL__/api/mcp" }
+  }
+}</code></pre>
+            </article>
+
+            <article>
+              <h3 class="text-xl font-bold">VS Code (Copilot agent mode)</h3>
+              <p class="mt-1 leading-snug"><a data-deeplink="vscode" class="underline" href="#install">One-click install</a>, or add to <code class="font-mono">.vscode/mcp.json</code>:</p>
+              <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>{
+  "servers": {
+    "killmyidea": { "type": "http", "url": "__SITE_URL__/api/mcp" }
+  }
+}</code></pre>
+            </article>
+
+            <article>
+              <h3 class="text-xl font-bold">Codex</h3>
+              <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>codex mcp add killmyidea --url __SITE_URL__/api/mcp</code></pre>
+              <p class="mt-2 leading-snug">Or in <code class="font-mono">~/.codex/config.toml</code>:</p>
+              <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>[mcp_servers.killmyidea]
+url = "__SITE_URL__/api/mcp"</code></pre>
+            </article>
+
+            <article>
+              <h3 class="text-xl font-bold">Windsurf</h3>
+              <p class="mt-1 leading-snug">In <code class="font-mono">~/.codeium/windsurf/mcp_config.json</code>:</p>
+              <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>{
+  "mcpServers": {
+    "killmyidea": { "serverUrl": "__SITE_URL__/api/mcp" }
+  }
+}</code></pre>
+            </article>
+
+            <article>
+              <h3 class="text-xl font-bold">Gemini CLI</h3>
+              <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>gemini mcp add --transport http killmyidea __SITE_URL__/api/mcp</code></pre>
+            </article>
+
+            <article>
+              <h3 class="text-xl font-bold">Clients that only speak stdio</h3>
+              <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>{
+  "mcpServers": {
+    "killmyidea": { "command": "npx", "args": ["-y", "mcp-remote", "__SITE_URL__/api/mcp"] }
+  }
+}</code></pre>
+            </article>
+          </div>
+        </section>
+
+        <section class="mt-14 border-t-2 border-ink pt-8" aria-labelledby="tools">
+          <h2 id="tools" class="text-3xl font-black uppercase tracking-tight sm:text-4xl">Tools</h2>
+
+          <article class="mt-6">
+            <h3 class="font-mono text-lg font-bold">judge_idea</h3>
+            <p class="mt-1 max-w-2xl leading-snug">
+              Judges a startup or side-project idea. Returns the verdict, a 0-100 score, the best signal, the biggest risk and
+              eight 0-100 sub-scores, each with its weight.
+            </p>
+            <div class="mt-3 overflow-x-auto">
+              <table class="w-full border-2 border-ink text-left text-sm">
+                <thead class="bg-ink font-mono text-[11px] uppercase tracking-widest text-paper">
+                  <tr><th class="px-3 py-2">Argument</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">What it does</th></tr>
+                </thead>
+                <tbody class="[&_td]:border-t-2 [&_td]:border-ink [&_td]:px-3 [&_td]:py-2 [&_td]:align-top">
+                  <tr><td class="font-mono">idea</td><td class="font-mono">string, 20-5000 chars</td><td>Required. Who it is for, what it does, how it makes money or spreads. More detail, better verdict.</td></tr>
+                  <tr><td class="font-mono">goal</td><td class="font-mono">"money" | "open_source" | "fun"</td><td>Default <code class="font-mono">money</code>. <code class="font-mono">open_source</code> swaps Money for Adoption; <code class="font-mono">fun</code> swaps Real problem and Money for Immediate appeal and Fun.</td></tr>
+                  <tr><td class="font-mono">do_not_archive</td><td class="font-mono">boolean</td><td>Default <code class="font-mono">false</code>. Set <code class="font-mono">true</code> for confidential ideas: the text is not stored.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="mt-8">
+            <h3 class="font-mono text-lg font-bold">get_stats</h3>
+            <p class="mt-1 max-w-2xl leading-snug">How many ideas Kill My Idea has analyzed and how many were killed, fixed or shipped. No arguments.</p>
+          </article>
+
+          <h3 class="mt-10 font-mono text-[11px] uppercase tracking-widest opacity-60">Example judge_idea result (structuredContent, trimmed)</h3>
+          <pre class="mt-2 overflow-x-auto border-2 border-ink bg-ink p-4 font-mono text-sm leading-relaxed text-paper"><code>{
+  "verdict": "FIX",
+  "verdict_label": "FIX IT",
+  "score": 58,
+  "needs_detail": false,
+  "goal": "money",
+  "category": "SaaS",
+  "best_signal": { "dimension": "buildable", "label": "Buildable", "score": 75,
+                   "note": "You could ship a first version this week." },
+  "biggest_risk": { "dimension": "money", "label": "Money", "score": 25,
+                    "note": "Getting users may be easier than getting customers." },
+  "dimensions": [
+    { "key": "problem", "label": "Real problem", "score": 75, "weight": 2,
+      "question": "Does it fix something people actually feel?" },
+    …
+  ],
+  "thresholds": { "kill": "&lt;50", "fix": "50-64", "ship": "65+" },
+  "scoring_version": 2,
+  "latency_ms": 912
+}</code></pre>
+          <p class="mt-3 max-w-2xl leading-snug">
+            When <code class="font-mono">needs_detail</code> is <code class="font-mono">true</code>, the idea was too vague to judge:
+            <code class="font-mono">verdict</code> and <code class="font-mono">score</code> are <code class="font-mono">null</code>.
+            A good agent asks the user for more detail instead of guessing.
+          </p>
+        </section>
+
+        <section class="mt-14 border-t-2 border-ink pt-8" aria-labelledby="build">
+          <h2 id="build" class="text-3xl font-black uppercase tracking-tight sm:text-4xl">Build it into your own agent</h2>
+
+          <h3 class="mt-6 text-xl font-bold">Raw HTTP</h3>
+          <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>curl -s __SITE_URL__/api/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
+        "name":"judge_idea",
+        "arguments":{"idea":"A Slack bot that turns standups into a weekly changelog for clients.","goal":"money"}}}'</code></pre>
+
+          <h3 class="mt-8 text-xl font-bold">TypeScript MCP SDK</h3>
+          <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+
+const client = new Client({ name: 'my-agent', version: '1.0.0' })
+await client.connect(new StreamableHTTPClientTransport(new URL('__SITE_URL__/api/mcp')))
+
+const { structuredContent } = await client.callTool({
+  name: 'judge_idea',
+  arguments: { idea: 'A Slack bot that turns standups into a weekly changelog for clients.' },
+})</code></pre>
+
+          <h3 class="mt-8 text-xl font-bold">Claude API (MCP connector)</h3>
+          <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>curl https://api.anthropic.com/v1/messages \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H 'anthropic-version: 2023-06-01' \
+  -H 'anthropic-beta: mcp-client-2025-11-20,server-side-fallback-2026-07-01' \
+  -H 'content-type: application/json' \
+  -d '{
+    "model": "claude-opus-5-5",
+    "max_tokens": 16000,
+    "fallbacks": "default",
+    "mcp_servers": [{ "type": "url", "url": "__SITE_URL__/api/mcp", "name": "killmyidea" }],
+    "tools": [{ "type": "mcp_toolset", "mcp_server_name": "killmyidea" }],
+    "messages": [{ "role": "user", "content": "Judge my idea: a Slack bot that turns standups into a weekly changelog for clients." }]
+  }'</code></pre>
+
+          <h3 class="mt-8 text-xl font-bold">OpenAI Responses API</h3>
+          <pre class="mt-2 overflow-x-auto border-2 border-ink bg-white/40 p-4 font-mono text-sm"><code>"tools": [{
+  "type": "mcp",
+  "server_label": "killmyidea",
+  "server_url": "__SITE_URL__/api/mcp",
+  "require_approval": "never"
+}]</code></pre>
+        </section>
+
+        <section class="mt-14 border-t-2 border-ink pt-8" aria-labelledby="scoring">
+          <h2 id="scoring" class="text-3xl font-black uppercase tracking-tight sm:text-4xl">How Jev decides</h2>
+          <p class="mt-3 max-w-2xl text-lg leading-snug">
+            No chatbot opinion. <a class="underline" href="https://typesafe.ai" target="_blank" rel="noopener noreferrer">Jev by TypeSafe AI</a>
+            answers ten fixed questions in parallel with calibrated probabilities: eight indie-hacker questions scored 0-4, the
+            category, and whether the idea is understandable at all.
+          </p>
+          <ul class="mt-5 max-w-2xl list-disc space-y-1 pl-5 leading-snug">
+            <li>Each answer × 25 → 0-100. The score is the weighted average. Real problem and Money count twice.</li>
+            <li><strong class="text-kill">KILL IT</strong> below 50 · <strong>FIX IT</strong> 50-64 · <strong class="text-[#14833e]">SHIP IT</strong> 65+.</li>
+            <li>The same idea gets the same rubric every time. The code is <a class="underline" href="https://github.com/monteduro/killmyidea" target="_blank" rel="noopener noreferrer">open source</a>.</li>
+          </ul>
+        </section>
+
+        <section class="mt-14 border-t-2 border-ink pt-8" aria-labelledby="faq">
+          <h2 id="faq" class="text-3xl font-black uppercase tracking-tight sm:text-4xl">FAQ</h2>
+          <dl class="mt-6 max-w-2xl space-y-6">
+            <div>
+              <dt class="text-lg font-bold">Is it really free?</dt>
+              <dd class="mt-1 leading-snug">Yes. No API key, no account, no OAuth. Please don't hammer it: it is a side project.</dd>
+            </div>
+            <div>
+              <dt class="text-lg font-bold">Which clients work?</dt>
+              <dd class="mt-1 leading-snug">Anything that supports remote MCP servers over Streamable HTTP. Older clients can bridge with <code class="font-mono">npx mcp-remote</code>.</dd>
+            </div>
+            <div>
+              <dt class="text-lg font-bold">Are my ideas stored?</dt>
+              <dd class="mt-1 leading-snug">Archived anonymously for product analytics, with no IP address and no identifiers. Pass <code class="font-mono">do_not_archive: true</code> and the text is not stored. Calls are counted (tool name, client name, user agent), never their arguments.</dd>
+            </div>
+            <div>
+              <dt class="text-lg font-bold">Can I trust the verdict?</dt>
+              <dd class="mt-1 leading-snug">It is a fast, consistent first filter, not market research. Use the biggest risk to decide what to test next.</dd>
+            </div>
+          </dl>
+        </section>
+      </main>
+
+      <footer class="mt-auto flex flex-wrap justify-between gap-x-6 gap-y-1 px-5 pb-6 pt-10 font-mono text-[10px] uppercase tracking-widest opacity-50 sm:px-8">
+        <span>Decisions by Jev / <a href="https://typesafe.ai" target="_blank" rel="noopener noreferrer" class="underline hover:opacity-100">TypeSafe AI</a></span>
+        <span>
+          <a href="/stats/" class="underline">Stats</a>
+          · <a href="https://github.com/monteduro/killmyidea" target="_blank" rel="noopener noreferrer" class="underline">Source on GitHub</a>
+          · Built by <a href="https://x.com/stemonteduro" target="_blank" rel="noopener noreferrer" class="underline">stemonte</a>
+        </span>
+      </footer>
+    </div>
+    <script type="module" src="/src/mcp-page.tsx"></script>
+  </body>
+</html>

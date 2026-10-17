@@ -1,64 +1,90 @@
 /// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { readFileSync } from 'node:fs'
 import type { IncomingMessage } from 'node:http'
+import { resolve } from 'node:path'
 import { defineConfig, loadEnv, type Plugin } from 'vite'
+import { forwardedHeaders } from './api/_headers'
 
-// Serves api/evaluate.ts and api/stats.ts during `npm run dev`, mirroring the production server.
+// Serves api/*.ts during `npm run dev`, mirroring the production server (server.ts).
+const API_ROUTES: Record<string, { module: string; methods: string[] }> = {
+  '/api/evaluate': { module: '/api/evaluate.ts', methods: ['POST'] },
+  '/api/stats': { module: '/api/stats.ts', methods: ['GET'] },
+  '/api/usage': { module: '/api/usage.ts', methods: ['GET'] },
+  '/api/mcp': { module: '/api/mcp.ts', methods: ['POST', 'GET', 'OPTIONS'] },
+}
+
 function localApi(): Plugin {
   return {
     name: 'local-api',
     configureServer(server) {
-      const respond = async (res: import('node:http').ServerResponse, response: Response) => {
-        res.statusCode = response.status
-        response.headers.forEach((v, k) => res.setHeader(k, v))
-        res.end(await response.text())
+      for (const [path, { module, methods }] of Object.entries(API_ROUTES)) {
+        server.middlewares.use(path, async (req, res, next) => {
+          // `use` also matches sub-paths such as /api/mcp/x.
+          if (req.url !== '/' && !req.url?.startsWith('/?')) return next()
+          try {
+            const method = req.method ?? 'GET'
+            if (!methods.includes(method)) {
+              res.statusCode = 405
+              return res.end()
+            }
+            const mod = await server.ssrLoadModule(module)
+            const body = method === 'POST' ? await readBody(req) : undefined
+            const response: Response = await mod[method](
+              new Request(`http://localhost${path}`, { method, body, headers: forwardedHeaders(req.headers) }),
+            )
+            res.statusCode = response.status
+            response.headers.forEach((v, k) => res.setHeader(k, v))
+            res.end(await response.text())
+          } catch (err) {
+            server.ssrFixStacktrace(err as Error)
+            res.statusCode = 500
+            res.end(JSON.stringify({ error: String(err) }))
+          }
+        })
       }
-      server.middlewares.use('/api/evaluate', async (req, res) => {
-        try {
-          const mod = await server.ssrLoadModule('/api/evaluate.ts')
-          if (req.method !== 'POST') {
-            res.statusCode = 405
-            return res.end()
-          }
-          const body = await readBody(req)
-          const response: Response = await mod.POST(
-            new Request('http://localhost/api/evaluate', { method: 'POST', body, headers: { 'Content-Type': 'application/json' } }),
-          )
-          await respond(res, response)
-        } catch (err) {
-          server.ssrFixStacktrace(err as Error)
-          res.statusCode = 500
-          res.end(JSON.stringify({ error: String(err) }))
-        }
-      })
-      server.middlewares.use('/api/stats', async (req, res) => {
-        try {
-          const mod = await server.ssrLoadModule('/api/stats.ts')
-          if (req.method !== 'GET') {
-            res.statusCode = 405
-            return res.end()
-          }
-          await respond(res, await mod.GET())
-        } catch (err) {
-          server.ssrFixStacktrace(err as Error)
-          res.statusCode = 500
-          res.end(JSON.stringify({ error: String(err) }))
-        }
-      })
     },
   }
 }
 
-// Absolute URLs for canonical/OG tags, robots.txt and sitemap.xml.
-// Set SITE_URL for previews; defaults to production.
+// Absolute URLs for canonical/OG tags, robots.txt, sitemap.xml and the agent docs
+// (/mcp.md from mcp/mcp.md, /llms.txt). Set SITE_URL for previews; defaults to production.
 function siteUrl(): Plugin {
   const base = () => (process.env.SITE_URL || 'https://killmyidea.biz').replace(/\/$/, '')
+  const withBase = (text: string) => text.replaceAll('__SITE_URL__', base())
+  const agentDocs = (): Record<string, string> => ({
+    'mcp.md': withBase(readFileSync(resolve(import.meta.dirname, 'mcp/mcp.md'), 'utf8')),
+    'llms.txt': `# Kill My Idea
+
+> Describe a startup idea; Jev (TypeSafe AI) decides: KILL IT, FIX IT or SHIP IT, with a 0-100 score. Also a free, public MCP server for AI agents (no API key).
+
+## Docs
+
+- [MCP server setup and tools](${base()}/mcp.md): endpoint, per-client config, tool schemas, output format
+- [MCP server (HTML)](${base()}/mcp/): the same, for humans
+- [Source code](https://github.com/monteduro/killmyidea)
+
+## MCP
+
+- Endpoint: ${base()}/api/mcp (Streamable HTTP, stateless, no auth)
+- Tools: judge_idea(idea, goal?, do_not_archive?), get_stats()
+`,
+  })
   return {
     name: 'site-url',
-    transformIndexHtml: (html) => html.replaceAll('__SITE_URL__', base()),
+    transformIndexHtml: (html) => withBase(html),
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const doc = agentDocs()[req.url?.split('?')[0].slice(1) ?? '']
+        if (doc === undefined) return next()
+        res.setHeader('Content-Type', `${req.url?.endsWith('.md') ? 'text/markdown' : 'text/plain'}; charset=utf-8`)
+        res.end(doc)
+      })
+    },
     generateBundle() {
       if (this.environment.name !== 'client') return
+      for (const [fileName, source] of Object.entries(agentDocs())) this.emitFile({ type: 'asset', fileName, source })
       this.emitFile({ type: 'asset', fileName: 'robots.txt', source: `User-agent: *\nAllow: /\n\nSitemap: ${base()}/sitemap.xml\n` })
       this.emitFile({
         type: 'asset',
@@ -66,6 +92,8 @@ function siteUrl(): Plugin {
         source: `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>${base()}/</loc></url>
+  <url><loc>${base()}/mcp/</loc></url>
+  <url><loc>${base()}/stats/</loc></url>
 </urlset>
 `,
       })
@@ -110,6 +138,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), tailwindcss(), localApi(), siteUrl(), datafast(mode)],
     server: { host: '127.0.0.1', port: 5317, strictPort: true },
+    // Static docs page for the MCP server, next to the SPA.
+    build: { rollupOptions: { input: { main: resolve(import.meta.dirname, 'index.html'), mcp: resolve(import.meta.dirname, 'mcp/index.html'), stats: resolve(import.meta.dirname, 'stats/index.html') } } },
     test: { environment: 'node' },
   }
 })

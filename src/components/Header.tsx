@@ -10,6 +10,7 @@ export function Header({
   onHome,
   onHistory,
   onStats,
+  active,
 }: {
   showLogo: boolean
   historyCount: number
@@ -17,6 +18,8 @@ export function Header({
   onHome: () => void
   onHistory: () => void
   onStats: () => void
+  /** Highlights the button of the page being shown. */
+  active?: 'mcp'
 }) {
   const [stars, setStars] = useState<number | null>(null)
 
@@ -47,29 +50,39 @@ export function Header({
       ) : (
         <span className="pt-1 font-mono text-[11px] uppercase tracking-widest opacity-60">v1 / jev-latest</span>
       )}
-      <nav className="ml-auto flex items-stretch gap-1 sm:gap-2">
+      <nav className="flex w-full items-stretch gap-1 sm:ml-auto sm:w-auto sm:gap-2">
         {killedCount !== null && (
           <button
             onClick={onStats}
             title="Verdict breakdown of all analyzed ideas"
-            className="animate-rise cursor-pointer border-2 border-ink bg-ink px-3 py-1.5 font-mono text-xs uppercase tracking-widest text-paper transition-colors hover:bg-kill hover:text-ink"
+            className="animate-rise flex-1 cursor-pointer whitespace-nowrap border-2 border-ink bg-ink px-2 py-1.5 sm:flex-none sm:px-3 font-mono text-xs uppercase tracking-widest text-paper transition-colors hover:bg-kill hover:text-ink"
           >
             Analyzed<span className="ml-2 opacity-70 tabular-nums">{killedCount.toLocaleString('en-US')}</span>
           </button>
         )}
         <button
           onClick={onHistory}
-          className="cursor-pointer border-2 border-current px-3 py-1.5 font-mono text-xs uppercase tracking-widest hover:bg-current/10"
+          className="flex-1 cursor-pointer whitespace-nowrap border-2 border-current px-2 py-1.5 sm:flex-none sm:px-3 font-mono text-xs uppercase tracking-widest hover:bg-current/10"
         >
           History{historyCount > 0 && <span className="ml-2 opacity-60">{historyCount}</span>}
         </button>
+        <a
+          href="/mcp/"
+          title="Free MCP server for AI agents"
+          aria-current={active === 'mcp' ? 'page' : undefined}
+          className={`flex flex-1 items-center justify-center border-2 border-current px-2 py-1.5 sm:flex-none sm:px-3 font-mono text-xs uppercase tracking-widest ${
+            active === 'mcp' ? 'border-kill bg-kill text-ink' : 'hover:bg-current/10'
+          }`}
+        >
+          MCP
+        </a>
         <a
           href={REPO_URL}
           target="_blank"
           rel="noopener noreferrer"
           aria-label={stars === null ? 'Source code on GitHub' : `Source code on GitHub, ${stars.toLocaleString('en-US')} stars`}
           title="Source code on GitHub"
-          className="flex min-h-8 shrink-0 items-center justify-center gap-1.5 border-2 border-current px-2 font-mono text-xs tabular-nums hover:bg-current/10"
+          className="flex min-h-8 flex-1 shrink-0 items-center justify-center gap-1.5 sm:flex-none border-2 border-current px-2 font-mono text-xs tabular-nums hover:bg-current/10"
         >
           <GitHubIcon className="size-4" />
           {stars !== null && (

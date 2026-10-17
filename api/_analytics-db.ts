@@ -25,6 +25,7 @@ const table = (name: string) => `
     scoring_version INTEGER NOT NULL DEFAULT 1,
     needs_detail INTEGER NOT NULL DEFAULT 0,
     goal TEXT NOT NULL DEFAULT 'money',
+    source TEXT NOT NULL DEFAULT 'web',
     problem INTEGER,
     appeal INTEGER,
     customer INTEGER NOT NULL,
@@ -40,12 +41,32 @@ const table = (name: string) => `
   ) STRICT;
 `
 
+/** One row per MCP JSON-RPC message: usage analytics for the MCP server. No IP, no idea text. */
+const MCP_REQUESTS = `
+  CREATE TABLE IF NOT EXISTS mcp_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL,
+    method TEXT NOT NULL,
+    tool TEXT,
+    client_name TEXT,
+    client_version TEXT,
+    user_agent TEXT,
+    protocol_version TEXT,
+    ok INTEGER NOT NULL,
+    error TEXT,
+    latency_ms INTEGER NOT NULL
+  ) STRICT;
+  CREATE INDEX IF NOT EXISTS mcp_requests_created_at_idx ON mcp_requests(created_at);
+  CREATE INDEX IF NOT EXISTS mcp_requests_method_tool_idx ON mcp_requests(method, tool);
+`
+
 const indexes = `
   CREATE INDEX IF NOT EXISTS evaluations_created_at_idx ON evaluations(created_at);
   CREATE INDEX IF NOT EXISTS evaluations_verdict_idx ON evaluations(verdict);
   CREATE INDEX IF NOT EXISTS evaluations_category_idx ON evaluations(category);
   CREATE INDEX IF NOT EXISTS evaluations_goal_idx ON evaluations(goal);
   CREATE INDEX IF NOT EXISTS evaluations_scoring_version_idx ON evaluations(scoring_version);
+  CREATE INDEX IF NOT EXISTS evaluations_source_idx ON evaluations(source);
 `
 
 /** Columns shared by the pre-goal table and the current one. */
@@ -104,14 +125,37 @@ function migrateScoringColumns(db: DatabaseSync) {
     db.exec('ALTER TABLE evaluations ADD COLUMN needs_detail INTEGER NOT NULL DEFAULT 0')
   }
   if (!columns.has('appeal')) db.exec('ALTER TABLE evaluations ADD COLUMN appeal INTEGER')
+  // Rows from before the MCP server all came from the website.
+  if (!columns.has('source')) db.exec("ALTER TABLE evaluations ADD COLUMN source TEXT NOT NULL DEFAULT 'web'")
   db.exec('UPDATE evaluations SET needs_detail = understandable < 0.3 WHERE scoring_version = 1')
 }
+
+/** Where an evaluation was requested: the website form or the MCP server. */
+export type EvaluationSource = 'web' | 'mcp'
 
 export type ArchivedEvaluation = {
   requestId: string
   createdAt: string
   idea: string
+  /** Defaults to 'web'. */
+  source?: EvaluationSource
   evaluation: Evaluation
+}
+
+export type McpRequestLog = {
+  createdAt: string
+  method: string
+  /** Only for tools/call. */
+  tool?: string
+  /** clientInfo, only sent with initialize. */
+  clientName?: string
+  clientVersion?: string
+  userAgent?: string
+  protocolVersion?: string
+  ok: boolean
+  /** JSON-RPC error code or the tool's error message. */
+  error?: string
+  latencyMs: number
 }
 
 export class EvaluationArchive {
@@ -128,19 +172,20 @@ export class EvaluationArchive {
     this.db.exec(table('evaluations'))
     migrateScoringColumns(this.db)
     this.db.exec(indexes)
+    this.db.exec(MCP_REQUESTS)
   }
 
-  save({ requestId, createdAt, idea, evaluation }: ArchivedEvaluation) {
+  save({ requestId, createdAt, idea, source = 'web', evaluation }: ArchivedEvaluation) {
     const d = evaluation.dimensions
     this.db
       .prepare(`
         INSERT INTO evaluations (
           request_id, created_at, idea, idea_length, score, verdict, category,
           understandable, decisions, latency_ms, model, mock, input_tokens, output_tokens,
-          scoring_version, needs_detail, goal, problem, appeal, customer, demand, money, adoption, fun,
+          scoring_version, needs_detail, goal, source, problem, appeal, customer, demand, money, adoption, fun,
           reach, different, buildable, shareable, debug_json
         ) VALUES (
-          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
       `)
       .run(
@@ -161,6 +206,7 @@ export class EvaluationArchive {
         evaluation.scoringVersion,
         evaluation.needsDetail ? 1 : 0,
         evaluation.goal ?? 'money',
+        source,
         d.problem ?? null,
         d.appeal ?? null,
         d.customer,
@@ -173,6 +219,27 @@ export class EvaluationArchive {
         d.buildable,
         d.shareable,
         JSON.stringify(evaluation.debug),
+      )
+  }
+
+  logMcpRequest(r: McpRequestLog) {
+    this.db
+      .prepare(`
+        INSERT INTO mcp_requests (
+          created_at, method, tool, client_name, client_version, user_agent, protocol_version, ok, error, latency_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        r.createdAt,
+        r.method,
+        r.tool ?? null,
+        r.clientName ?? null,
+        r.clientVersion ?? null,
+        r.userAgent ?? null,
+        r.protocolVersion ?? null,
+        r.ok ? 1 : 0,
+        r.error ?? null,
+        Math.round(r.latencyMs),
       )
   }
 
@@ -193,9 +260,52 @@ export class EvaluationArchive {
     return verdicts
   }
 
+  /** Aggregates for the public /stats/ page. Daily rows start at `since` (ISO); everything else is all-time. */
+  publicUsage(since: string): PublicUsageRows {
+    const all = <T>(sql: string, params: Record<string, string> = {}) => this.db.prepare(sql).all(params) as T[]
+    const one = <T>(sql: string) => this.db.prepare(sql).get() as T
+    return {
+      totals: {
+        ...one<{ web: number; mcp: number }>(`
+          SELECT COALESCE(SUM(source = 'web'), 0) AS web, COALESCE(SUM(source = 'mcp'), 0) AS mcp FROM evaluations`),
+        ...one<{ connections: number; toolCalls: number }>(`
+          SELECT COALESCE(SUM(method = 'initialize'), 0) AS connections, COALESCE(SUM(method = 'tools/call' AND ok), 0) AS toolCalls
+          FROM mcp_requests`),
+      },
+      days: all(
+        `SELECT day, SUM(web) AS web, SUM(mcp) AS mcp, SUM(tool_calls) AS toolCalls
+         FROM (
+           SELECT substr(created_at, 1, 10) AS day, source = 'web' AS web, source = 'mcp' AS mcp, 0 AS tool_calls
+           FROM evaluations WHERE created_at >= :since
+           UNION ALL
+           SELECT substr(created_at, 1, 10), 0, 0, method = 'tools/call' AND ok
+           FROM mcp_requests WHERE created_at >= :since
+         ) GROUP BY day ORDER BY day`,
+        { since },
+      ),
+      tools: all(`
+        SELECT tool, COUNT(*) AS calls FROM mcp_requests
+        WHERE method = 'tools/call' AND ok GROUP BY tool ORDER BY calls DESC`),
+      clients: all(`
+        SELECT COALESCE(client_name, '') AS client, COUNT(*) AS connections FROM mcp_requests
+        WHERE method = 'initialize' GROUP BY client`),
+      verdicts: all(`
+        SELECT source, verdict, COUNT(*) AS n FROM evaluations WHERE NOT needs_detail GROUP BY source, verdict`),
+    }
+  }
+
   close() {
     this.db.close()
   }
+}
+
+export type PublicUsageRows = {
+  totals: { web: number; mcp: number; connections: number; toolCalls: number }
+  days: { day: string; web: number; mcp: number; toolCalls: number }[]
+  /** Raw tool and client names: callers must filter them before publishing. */
+  tools: { tool: string | null; calls: number }[]
+  clients: { client: string; connections: number }[]
+  verdicts: { source: string; verdict: string; n: number }[]
 }
 
 let archive: EvaluationArchive | undefined
@@ -213,10 +323,21 @@ export function saveEvaluation(record: ArchivedEvaluation) {
   archive.save(record)
 }
 
+export function logMcpRequest(record: McpRequestLog) {
+  archive ??= new EvaluationArchive()
+  archive.logMcpRequest(record)
+}
+
 /** Idea count and verdict totals with a 5-minute in-memory cache: at most one query per process per interval. */
 export function evaluationStats(): EvaluationStats {
   if (cachedStats && Date.now() - cachedStats.at < COUNT_TTL_MS) return cachedStats.value
   archive ??= new EvaluationArchive()
   cachedStats = { value: { count: archive.count(), verdicts: archive.verdictCounts() }, at: Date.now() }
   return cachedStats.value
+}
+
+/** Uncached; api/usage.ts caches the published result. */
+export function publicUsage(since: string): PublicUsageRows {
+  archive ??= new EvaluationArchive()
+  return archive.publicUsage(since)
 }
