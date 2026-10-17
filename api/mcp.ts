@@ -20,6 +20,7 @@ const SERVER_INFO = { name: 'killmyidea', title: 'Kill My Idea', version: '1.0.0
 const INSTRUCTIONS = `Kill My Idea judges startup and side-project ideas with Jev (TypeSafe AI), a classifier, not a chatbot.
 Call judge_idea with a concrete description: who it is for, what it does, how it makes money or spreads.
 It returns KILL IT (<${VERDICT_THRESHOLDS.fix}), FIX IT (${VERDICT_THRESHOLDS.fix}-${VERDICT_THRESHOLDS.ship - 1}) or SHIP IT (${VERDICT_THRESHOLDS.ship}+), a 0-100 score and eight 0-100 sub-scores.
+The text result is a ready-made card with bar charts in a code block: show it to the user exactly as returned, then add at most one sentence on what to test next.
 If needs_detail is true, ask the user for more detail instead of inventing a verdict.
 Ideas are archived anonymously for product analytics unless do_not_archive is true: set it for confidential ideas.`
 
@@ -34,7 +35,7 @@ const TOOLS = [
   {
     name: 'judge_idea',
     title: 'Judge a startup idea',
-    description: `Judge a startup or side-project idea. Returns a verdict (KILL IT, FIX IT or SHIP IT), a 0-100 score, the best signal, the biggest risk and eight 0-100 sub-scores. ${DECISION_COUNT} Jev decisions in about a second. Deterministic rubric, no generated prose.`,
+    description: `Judge a startup or side-project idea. Returns a verdict (KILL IT, FIX IT or SHIP IT), a 0-100 score, the best signal, the biggest risk and eight 0-100 sub-scores. ${DECISION_COUNT} Jev decisions in about a second. Deterministic rubric, no generated prose. The text result is a terminal-ready card with bar charts: show it as returned.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -154,22 +155,52 @@ export function toToolResult(evaluation: Evaluation) {
   }
 }
 
-/** Short Markdown for clients that only read text content. */
-function toText(result: ReturnType<typeof toToolResult>): string {
-  const lines = result.needs_detail
-    ? [`**${result.message}**`, '', 'Describe who it is for, what it does and how it makes money or spreads.']
-    : [
-        `**${result.verdict_label}** — ${result.score}/100 (goal: ${result.goal}, category: ${result.category})`,
-        '',
-        `Best signal: ${result.best_signal!.label} ${result.best_signal!.score} — ${result.best_signal!.note}`,
-        `Biggest risk: ${result.biggest_risk!.label} ${result.biggest_risk!.score} — ${result.biggest_risk!.note}`,
-      ]
+const BAR_WIDTH = 20
+const EIGHTHS = ['', '▏', '▎', '▍', '▌', '▋', '▊', '▉']
+
+/** 0-100 → fixed-width Unicode bar with eighth-block precision. */
+export function bar(score: number, width = BAR_WIDTH): string {
+  const eighths = Math.round((Math.max(0, Math.min(100, score)) / 100) * width * 8)
+  const full = Math.floor(eighths / 8)
+  const partial = EIGHTHS[eighths % 8]
+  return '█'.repeat(full) + partial + '░'.repeat(width - full - (partial ? 1 : 0))
+}
+
+/**
+ * The text content is a ready-made terminal card: verdict, score bar and one bar per question,
+ * in a code block so it stays aligned. Agents are told to show it as returned.
+ */
+export function toText(result: ReturnType<typeof toToolResult>): string {
+  const footer = `Judged by Jev (TypeSafe AI) in ${result.latency_ms}ms · ${result.try_it}`
+  if (result.needs_detail) {
+    return [
+      '```',
+      'NEEDS DETAIL · Jev cannot judge this yet',
+      '',
+      'Say who it is for, what it does and how it makes money or spreads.',
+      '```',
+      footer,
+    ].join('\n')
+  }
+  const pad = Math.max(...result.dimensions.map((d) => d.label.length))
+  const rule = '─'.repeat(pad + BAR_WIDTH + 12)
+  const best = result.best_signal!
+  const risk = result.biggest_risk!
+  const tags = [`${best.label} ${best.score}`, `${risk.label} ${risk.score}`]
+  const tag = Math.max(...tags.map((t) => t.length)) + 3
   return [
-    ...lines,
-    '',
-    ...result.dimensions.map((d) => `- ${d.label}: ${d.score}${d.weight > 1 ? ` (×${d.weight})` : ''}`),
-    '',
-    `Judged by Jev (TypeSafe AI) in ${result.latency_ms}ms. Try it: ${result.try_it}`,
+    '```',
+    `${result.verdict_label!.padEnd(9)} ${bar(result.score!)}  ${result.score}/100`,
+    `${result.category} · goal: ${GOAL_LABELS[result.goal as keyof typeof GOAL_LABELS] ?? result.goal}`,
+    rule,
+    ...result.dimensions.map(
+      (d) => `${d.label.padEnd(pad)}  ${bar(d.score)}  ${String(d.score).padStart(3)}${d.weight > 1 ? `  ×${d.weight}` : ''}`,
+    ),
+    rule,
+    `+ ${tags[0].padEnd(tag)}${best.note}`,
+    `- ${tags[1].padEnd(tag)}${risk.note}`,
+    '```',
+    footer,
   ].join('\n')
 }
 

@@ -158,9 +158,22 @@ No arguments. Returns `{ "analyzed": number, "verdicts": { "KILL": number, "FIX"
 
 ## How to present results
 
-- Lead with the verdict label and score, e.g. "FIX IT, 58/100".
-- Then the best signal and the biggest risk, using their `note`.
-- Suggest what to test next based on the biggest risk.
+The text content of `judge_idea` is a ready-made card with bar charts, in a code block so it stays aligned in a terminal:
+
+```
+KILL IT   ████████▎░░░░░░░░░░░  41/100
+Social · goal: Make money
+──────────────────────────────────────────────
+Real problem    ███▋░░░░░░░░░░░░░░░░   18  ×2
+Clear customer  ███████░░░░░░░░░░░░░   35
+...
+──────────────────────────────────────────────
++ Different 87   It doesn't look like everything else.
+- Money 13       Getting users may be easier than getting customers.
+```
+
+- Show the card exactly as returned, then add at most one sentence on what to test next.
+- If you build your own UI, use `structuredContent` instead.
 - Credit "Judged by Jev (TypeSafe AI)" and link __SITE_URL__ when you show a verdict to a person.
 
 ## Scoring

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { evaluationStats, logMcpRequest, saveEvaluation } from './_analytics-db'
-import { GET, OPTIONS, POST, PROTOCOL_VERSIONS } from './mcp'
+import { bar, GET, OPTIONS, POST, PROTOCOL_VERSIONS } from './mcp'
 
 vi.mock('./_analytics-db', () => ({
   saveEvaluation: vi.fn(),
@@ -108,6 +108,27 @@ describe('judge_idea', () => {
     const result = await call('judge_idea', { idea: 'too short' })
     expect(result.isError).toBe(true)
     expect(result.content[0].text).toMatch(/at least/i)
+  })
+})
+
+describe('terminal card', () => {
+  it('draws fixed-width bars with eighth blocks', () => {
+    expect(bar(0)).toBe('░'.repeat(20))
+    expect(bar(100)).toBe('█'.repeat(20))
+    expect(bar(41)).toBe('████████▎░░░░░░░░░░░')
+    for (const n of [3, 19, 50, 87]) expect([...bar(n)]).toHaveLength(20)
+  })
+
+  it('returns the verdict card in a code block, one bar per question', async () => {
+    const result = await call('judge_idea', { idea: 'A Slack bot that turns standups into a weekly changelog for clients.', do_not_archive: true })
+    const text: string = result.content[0].text
+    const lines = text.split('\n')
+    expect(lines[0]).toBe('```')
+    if (!result.structuredContent.needs_detail) {
+      expect(lines[1]).toMatch(/^(KILL|FIX|SHIP) IT\s+[█▏▎▍▌▋▊▉░]{20}\s+\d+\/100$/)
+      expect(lines.filter((l) => /[█░]{3}/.test(l))).toHaveLength(9)
+    }
+    expect(text).toContain('Judged by Jev')
   })
 })
 
